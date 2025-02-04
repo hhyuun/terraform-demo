@@ -1,7 +1,3 @@
-provider "aws" {
-  region = "ap-northeast-2"
-}
-
 resource "aws_lb" "example" {
  name = "terraform-asg-example"
  load_balancer_type = "application"
@@ -40,7 +36,7 @@ resource "aws_lb_listener_rule" "asg" {
 
 
 resource "aws_security_group" "alb" {
- name = "terraform-example-alb"
+ name = var.cluster_name
  # Allow inbound HTTP requests
  ingress {
  from_port = 80
@@ -60,15 +56,15 @@ resource "aws_security_group" "alb" {
 
 resource "aws_launch_configuration" "example" {
  image_id = "ami-024ea438ab0376a47"
- instance_type = "t3.micro"
+ instance_type = var.instance_type
  security_groups = [aws_security_group.instance.id]
- user_data = <<-EOF
- #!/bin/bash
- echo "Hello, World" > index.html
- nohup busybox httpd -f -p ${var.server_port} &
- EOF
-   lifecycle {
-   create_before_destroy = true
+ user_data = templatefile("user-data.sh", {
+  server_port = var.server_port
+  db_address = data.terraform_remote_state.db.outputs.address
+  db_port = data.terraform_remote_state.db.outputs.port
+  }) 
+ lifecycle {
+  create_before_destroy = true
  }
 }
 
@@ -88,8 +84,8 @@ resource "aws_autoscaling_group" "example" {
  target_group_arns = [aws_lb_target_group.asg.arn]
  health_check_type = "ELB"
  vpc_zone_identifier = data.aws_subnets.default.ids
- min_size = 2
- max_size = 10
+ min_size = var.min_size
+ max_size = var.max_size
  tag {
  key = "Name"
  value = "terraform-asg-example"
@@ -115,6 +111,14 @@ data "aws_subnets" "default" {
  values = [data.aws_vpc.default.id]
  }
 }
+data "terraform_remote_state" "db" {
+ backend = "s3"
+ config = {
+ bucket = "terraform-state-guswl-wave"
+ key = "stage/data-stores/mysql/terraform.tfstate"
+ region = "ap-northeast-2"
+ }
+}
 
 resource "aws_lb_target_group" "asg" {
  name = "terraform-asg-example"
@@ -131,6 +135,3 @@ resource "aws_lb_target_group" "asg" {
  unhealthy_threshold = 2 # 한번실패했다고 바로차단하는게 아니라 두번연속 실패해야 차단하겠다
  }
 }
-
-
-
