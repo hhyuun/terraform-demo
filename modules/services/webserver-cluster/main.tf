@@ -7,7 +7,7 @@ resource "aws_lb" "example" {
 
 resource "aws_lb_listener" "http" {
  load_balancer_arn = aws_lb.example.arn
- port = 80
+ port = local.http_port
  protocol = "HTTP"
  # By default, return a simple 404 page
  default_action {
@@ -39,17 +39,17 @@ resource "aws_security_group" "alb" {
  name = var.cluster_name
  # Allow inbound HTTP requests
  ingress {
- from_port = 80
- to_port = 80
- protocol = "tcp"
- cidr_blocks = ["0.0.0.0/0"]
+ from_port = local.http_port
+ to_port = local.http_port
+ protocol = local.tcp_protocol
+ cidr_blocks = local.all_ips
  }
  # Allow all outbound requests
  egress {
- from_port = 0
- to_port = 0
- protocol = "-1"
- cidr_blocks = ["0.0.0.0/0"]
+ from_port = local.any_port
+ to_port = local.any_port
+ protocol = local.any_protocol
+ cidr_blocks = local.all_ips
  }
 }
 
@@ -134,4 +134,12 @@ resource "aws_lb_target_group" "asg" {
  healthy_threshold = 2
  unhealthy_threshold = 2 # 한번실패했다고 바로차단하는게 아니라 두번연속 실패해야 차단하겠다
  }
+}
+
+locals {
+ http_port = 80
+ any_port = 0
+ any_protocol = "-1"
+ tcp_protocol = "tcp"
+ all_ips = ["0.0.0.0/0"]
 }
